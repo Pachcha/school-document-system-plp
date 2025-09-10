@@ -1,0 +1,1726 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบจัดการรูปเอกสารโรงเรียน - ประชาสัมพันธ์</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { font-family: 'Sarabun', sans-serif; }
+        
+        /* Animations */
+        .sidebar-item { transition: all 0.3s; }
+        .sidebar-item:hover { transform: translateX(5px); }
+        .sidebar-item.active { 
+            background: linear-gradient(to right, #3b82f6, #2563eb);
+            color: white;
+        }
+        .doc-card { transition: all 0.3s; }
+        .doc-card:hover { 
+            transform: translateY(-10px); 
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15); 
+        }
+        .fade-in { animation: fadeIn 0.5s; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        .slide-in { animation: slideIn 0.5s ease-out; }
+        @keyframes slideIn {
+            from { transform: translateX(-100px); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .marquee { animation: marquee 20s linear infinite; }
+        @keyframes marquee {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
+        }
+        .badge-new { animation: blink 1s infinite; }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* Loading overlay */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Notification styles */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 16px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+            animation: slideInRight 0.3s ease-out;
+        }
+        
+        @keyframes slideInRight {
+            from { transform: translateX(100%); }
+            to { transform: translateX(0); }
+        }
+        
+        .notification.success { background: #10b981; color: white; }
+        .notification.error { background: #ef4444; color: white; }
+        .notification.warning { background: #f59e0b; color: white; }
+        .notification.info { background: #3b82f6; color: white; }
+        
+        /* File preview */
+        .file-preview-item {
+            position: relative;
+            border: 2px dashed #d1d5db;
+            border-radius: 8px;
+            padding: 12px;
+            background: #f9fafb;
+        }
+        
+        .file-preview-item:hover {
+            border-color: #3b82f6;
+            background: #eff6ff;
+        }
+        
+        /* Cloud storage card styles */
+        .cloud-card {
+            transition: all 0.3s;
+            border: 2px solid transparent;
+        }
+        
+        .cloud-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            border-color: #3b82f6;
+        }
+        
+        .cloud-status {
+            animation: pulse 2s infinite;
+        }
+        
+        /* Accessibility */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border-width: 0;
+        }
+        
+        .focus\:not-sr-only:focus {
+            position: static;
+            width: auto;
+            height: auto;
+            padding: inherit;
+            margin: inherit;
+            overflow: visible;
+            clip: auto;
+            white-space: normal;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <!-- Skip to main content (Accessibility) -->
+    <a href="#main-content" class="sr-only focus:not-sr-only bg-blue-600 text-white p-2 rounded">
+        ข้ามไปยังเนื้อหาหลัก
+    </a>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="bg-white p-6 rounded-lg shadow-xl flex flex-col items-center">
+            <div class="spinner mb-4"></div>
+            <p class="text-gray-600">กำลังโหลด...</p>
+        </div>
+    </div>
+
+    <!-- Notification Container -->
+    <div id="notificationContainer"></div>
+
+    <!-- Navigation Bar -->
+    <nav class="bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg">
+        <div class="container mx-auto px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <i class="fas fa-school text-2xl"></i>
+                <h1 class="text-xl font-bold">ระบบจัดการรูปเอกสารโรงเรียน</h1>
+            </div>
+            <div class="flex items-center space-x-4">
+                <button id="cloudStorageBtn" class="hover:bg-blue-800 p-2 rounded transition" aria-label="Cloud Storage">
+                    <i class="fas fa-cloud"></i> Cloud Storage
+                </button>
+                <button id="notificationBtn" class="relative hover:bg-blue-800 p-2 rounded transition" aria-label="การแจ้งเตือน">
+                    <i class="fas fa-bell"></i>
+                    <span id="notificationBadge" class="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">3</span>
+                </button>
+                <span class="text-sm">สวัสดี, <span id="userName">คุณอาจารย์</span></span>
+                <img src="https://via.placeholder.com/40" class="rounded-full border-2 border-white" alt="Profile">
+                <button id="logoutBtn" class="hover:bg-blue-800 px-3 py-1 rounded transition">
+                    <i class="fas fa-sign-out-alt"></i> ออกจากระบบ
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Announcement Bar -->
+    <div class="bg-yellow-400 text-gray-800 py-2 overflow-hidden">
+        <div class="marquee flex items-center space-x-8">
+            <span class="flex items-center"><i class="fas fa-bullhorn mr-2"></i> <strong>ประกาศ:</strong> กรุณาอัพโหลดเอกสารการประเมินภายในวันที่ 15 ก.ย. 2568</span>
+            <span class="flex items-center"><i class="fas fa-cloud-upload-alt mr-2"></i> <strong>อัพเดท:</strong> ทุกกลุ่มงานเชื่อมต่อ Cloud Storage เรียบร้อยแล้ว</span>
+            <span class="flex items-center"><i class="fas fa-calendar-check mr-2"></i> การประชุมประจำเดือนวันที่ 12 ก.ย. 2568</span>
+        </div>
+    </div>
+
+    <div class="flex">
+        <!-- Sidebar -->
+        <aside class="w-64 bg-white shadow-md h-screen sticky top-0">
+            <div class="p-4">
+                <h2 class="text-lg font-semibold text-gray-700 mb-4">เมนูหลัก</h2>
+                <ul class="space-y-2">
+                    <li>
+                        <a href="#" data-menu-item="announcement" class="sidebar-item flex items-center space-x-3 text-gray-600 hover:text-blue-600 hover:bg-blue-50 p-3 rounded">
+                            <i class="fas fa-bullhorn"></i>
+                            <span>ประชาสัมพันธ์</span>
+                            <span class="ml-auto bg-red-500 text-white text-xs px-2 py-1 rounded-full badge-new">ใหม่</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-menu-item="cloud-storage" class="sidebar-item flex items-center space-x-3 text-gray-600 hover:text-blue-600 hover:bg-blue-50 p-3 rounded">
+                            <i class="fas fa-cloud"></i>
+                            <span>Cloud Storage</span>
+                            <span class="ml-auto bg-green-500 text-white text-xs px-2 py-1 rounded-full">ออนไลน์</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-menu-item="dashboard" class="sidebar-item flex items-center space-x-3 text-gray-600 hover:text-blue-600 hover:bg-blue-50 p-3 rounded">
+                            <i class="fas fa-tachometer-alt"></i>
+                            <span>แดชบอร์ด</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-menu-item="upload" class="sidebar-item flex items-center space-x-3 text-gray-600 hover:text-blue-600 hover:bg-blue-50 p-3 rounded">
+                            <i class="fas fa-cloud-upload-alt"></i>
+                            <span>อัพโหลดเอกสาร</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-menu-item="documents" class="sidebar-item flex items-center space-x-3 text-gray-600 hover:text-blue-600 hover:bg-blue-50 p-3 rounded">
+                            <i class="fas fa-folder-open"></i>
+                            <span>เอกสารทั้งหมด</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-menu-item="reports" class="sidebar-item flex items-center space-x-3 text-gray-600 hover:text-blue-600 hover:bg-blue-50 p-3 rounded">
+                            <i class="fas fa-chart-bar"></i>
+                            <span>รายงาน</span>
+                        </a>
+                    </li>
+                </ul>
+
+                <h2 class="text-lg font-semibold text-gray-700 mt-6 mb-4">กลุ่มงาน</h2>
+                <ul class="space-y-2">
+                    <li>
+                        <a href="#" data-department="hr" class="sidebar-item flex items-center space-x-3 text-gray-600 hover:text-purple-600 hover:bg-purple-50 p-3 rounded">
+                            <i class="fas fa-users"></i>
+                            <span>บริหารงานบุคคล</span>
+                            <span class="ml-auto bg-purple-100 text-purple-600 text-xs px-2 py-1 rounded-full">24</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-department="budget" class="sidebar-item flex items-center space-x-3 text-gray-600 hover:text-green-600 hover:bg-green-50 p-3 rounded">
+                            <i class="fas fa-chart-line"></i>
+                            <span>แผนงานและงบประมาณ</span>
+                            <span class="ml-auto bg-green-100 text-green-600 text-xs px-2 py-1 rounded-full">18</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-department="academic" class="sidebar-item flex items-center space-x-3 text-gray-600 hover:text-blue-600 hover:bg-blue-50 p-3 rounded">
+                            <i class="fas fa-graduation-cap"></i>
+                            <span>บริหารงานวิชาการ</span>
+                            <span class="ml-auto bg-blue-100 text-blue-600 text-xs px-2 py-1 rounded-full">42</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#" data-department="general" class="sidebar-item flex items-center space-x-3 text-gray-600 hover:text-orange-600 hover:bg-orange-50 p-3 rounded">
+                            <i class="fas fa-cogs"></i>
+                            <span>บริหารงานทั่วไป</span>
+                            <span class="ml-auto bg-orange-100 text-orange-600 text-xs px-2 py-1 rounded-full">31</span>
+                        </a>
+                    </li>
+                </ul>
+
+                <!-- Quick Actions -->
+                <div class="mt-6 p-4 bg-blue-50 rounded-lg">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-3">ทางลัด</h3>
+                    <div class="space-y-2">
+                        <button class="w-full text-left text-sm text-blue-600 hover:text-blue-800">
+                            <i class="fas fa-plus-circle mr-2"></i>เอกสารใหม่
+                        </button>
+                        <button class="w-full text-left text-sm text-blue-600 hover:text-blue-800">
+                            <i class="fas fa-tasks mr-2"></i>งานของฉัน
+                        </button>
+                        <button class="w-full text-left text-sm text-blue-600 hover:text-blue-800">
+                            <i class="fas fa-star mr-2"></i>รายการโปรด
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main id="main-content" class="flex-1 p-6">
+            <!-- Announcement Section -->
+            <div data-section="announcement" class="fade-in">
+                <div class="mb-6">
+                    <h2 class="text-3xl font-bold text-gray-800 mb-2">
+                        <i class="fas fa-bullhorn text-blue-600 mr-3"></i>ประชาสัมพันธ์เอกสารสำคัญ
+                    </h2>
+                    <p class="text-gray-600">อัพเดทเอกสารล่าสุดและประกาศสำคัญของโรงเรียน</p>
+                </div>
+
+                <!-- Cloud Storage Alert -->
+                <div class="bg-gradient-to-r from-blue-50 to-green-50 border-l-4 border-blue-500 p-4 mb-6">
+                    <div class="flex items-center">
+                        <i class="fas fa-cloud text-blue-600 text-2xl mr-3"></i>
+                        <div class="flex-1">
+                            <h4 class="text-blue-800 font-semibold">Cloud Storage เชื่อมต่อสำเร็จทุกกลุ่มงาน!</h4>
+                            <p class="text-blue-600 text-sm">ทุกกลุ่มงานได้เชื่อมต่อกับ Cloud Storage เรียบร้อยแล้ว สามารถเข้าถึงเอกสารได้ทุกที่ทุกเวลา</p>
+                        </div>
+                        <button onclick="DocumentManager.showSection('cloud-storage')" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                            <i class="fas fa-folder-open mr-1"></i>ดู Cloud Storage
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Search Bar -->
+                <div class="mb-6">
+                    <div class="bg-white rounded-lg shadow-md p-4">
+                        <div class="flex gap-4">
+                            <div class="flex-1 relative">
+                                <input 
+                                    type="text" 
+                                    id="globalSearch"
+                                    placeholder="ค้นหาเอกสาร..." 
+                                    class="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500"
+                                    aria-label="ค้นหาเอกสาร"
+                                >
+                                <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+                            </div>
+                            <button id="advancedSearchBtn" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">
+                                <i class="fas fa-sliders-h mr-2"></i>ค้นหาขั้นสูง
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Featured Documents -->
+                <div class="mb-8">
+                    <div class="bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg p-6 shadow-lg">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-xl font-bold flex items-center">
+                                <i class="fas fa-star mr-2"></i>เอกสารเด่นประจำสัปดาห์
+                            </h3>
+                            <span class="bg-white text-blue-600 px-3 py-1 rounded-full text-sm font-semibold">NEW</span>
+                        </div>
+                        <div id="featuredDocuments" class="grid md:grid-cols-2 gap-4">
+                            <!-- Featured documents will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Documents Grid -->
+                <div class="mb-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xl font-bold text-gray-800 flex items-center">
+                            <i class="fas fa-clock text-orange-500 mr-2"></i>เอกสารล่าสุด
+                        </h3>
+                        <div class="flex gap-2">
+                            <button class="view-toggle px-3 py-1 bg-gray-100 rounded-lg hover:bg-gray-200" data-view="grid">
+                                <i class="fas fa-th"></i>
+                            </button>
+                            <button class="view-toggle px-3 py-1 bg-gray-100 rounded-lg hover:bg-gray-200" data-view="list">
+                                <i class="fas fa-list"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="recentDocuments" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <!-- Recent documents will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- Quick Stats -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
+                    <div class="bg-white rounded-lg p-4 shadow text-center hover:shadow-lg transition">
+                        <i class="fas fa-file-alt text-3xl text-blue-500 mb-2"></i>
+                        <p class="text-2xl font-bold text-gray-800" id="totalDocs">115</p>
+                        <p class="text-sm text-gray-600">เอกสารทั้งหมด</p>
+                    </div>
+                    <div class="bg-white rounded-lg p-4 shadow text-center hover:shadow-lg transition">
+                        <i class="fas fa-clock text-3xl text-orange-500 mb-2"></i>
+                        <p class="text-2xl font-bold text-gray-800" id="todayDocs">12</p>
+                        <p class="text-sm text-gray-600">อัพโหลดวันนี้</p>
+                    </div>
+                    <div class="bg-white rounded-lg p-4 shadow text-center hover:shadow-lg transition">
+                        <i class="fas fa-hourglass-half text-3xl text-yellow-500 mb-2"></i>
+                        <p class="text-2xl font-bold text-gray-800" id="pendingDocs">5</p>
+                        <p class="text-sm text-gray-600">รออนุมัติ</p>
+                    </div>
+                    <div class="bg-white rounded-lg p-4 shadow text-center hover:shadow-lg transition">
+                        <i class="fas fa-users text-3xl text-purple-500 mb-2"></i>
+                        <p class="text-2xl font-bold text-gray-800" id="totalUsers">48</p>
+                        <p class="text-sm text-gray-600">ผู้ใช้งาน</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cloud Storage Section -->
+            <div data-section="cloud-storage" class="fade-in hidden">
+                <div class="mb-6">
+                    <h2 class="text-3xl font-bold text-gray-800 mb-2">
+                        <i class="fas fa-cloud text-blue-600 mr-3"></i>Cloud Storage ของแต่ละกลุ่มงาน
+                    </h2>
+                    <p class="text-gray-600">เข้าถึงพื้นที่จัดเก็บเอกสารออนไลน์ของแต่ละกลุ่มงาน</p>
+                </div>
+
+                <!-- Cloud Storage Status -->
+                <div class="bg-green-50 border-l-4 border-green-500 p-4 mb-6">
+                    <div class="flex items-center">
+                        <i class="fas fa-check-circle text-green-600 text-xl mr-3"></i>
+                        <div>
+                            <h4 class="text-green-800 font-semibold">สถานะ: เชื่อมต่อสำเร็จ</h4>
+                            <p class="text-green-600 text-sm">ระบบ Cloud Storage ทำงานปกติ - อัพเดทล่าสุด: วันนี้ เวลา 10:30 น.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cloud Storage Cards Grid -->
+                <div class="grid md:grid-cols-2 gap-6">
+                    <!-- กลุ่มบริหารงานบุคคล -->
+                    <div class="cloud-card bg-white rounded-lg shadow-lg overflow-hidden">
+                        <div class="bg-gradient-to-r from-purple-500 to-purple-600 p-4 text-white">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <i class="fas fa-users text-3xl mr-3 opacity-80"></i>
+                                    <div>
+                                        <h3 class="text-xl font-bold">กลุ่มบริหารงานบุคคล</h3>
+                                        <p class="text-purple-100 text-sm">Human Resources Department</p>
+                                    </div>
+                                </div>
+                                <span class="cloud-status bg-white/20 px-3 py-1 rounded-full text-sm">
+                                    <i class="fas fa-circle text-green-300 mr-1"></i>ออนไลน์
+                                </span>
+                            </div>
+                        </div>
+                        <div class="p-4">
+                            <div class="mb-4">
+                                <div class="flex items-center justify-between text-sm text-gray-600 mb-2">
+                                    <span><i class="fas fa-folder mr-1"></i>จำนวนโฟลเดอร์: 12</span>
+                                    <span><i class="fas fa-file mr-1"></i>จำนวนไฟล์: 156</span>
+                                </div>
+                                <div class="flex items-center justify-between text-sm text-gray-600">
+                                    <span><i class="fas fa-database mr-1"></i>พื้นที่ใช้งาน: 2.4 GB</span>
+                                    <span><i class="fas fa-user mr-1"></i>ผู้ใช้: 24 คน</span>
+                                </div>
+                            </div>
+                            <div class="border-t pt-4">
+                                <p class="text-sm text-gray-600 mb-3">เอกสารล่าสุด: คำสั่งแต่งตั้งคณะกรรมการ</p>
+                                <a href="https://home.mycloud.com/action/share/415a910f-f8af-4f42-a182-01f11a40fd06" 
+                                   target="_blank" 
+                                   class="block w-full bg-purple-600 text-white text-center py-2 rounded-lg hover:bg-purple-700 transition">
+                                    <i class="fas fa-external-link-alt mr-2"></i>เข้าสู่ Cloud Storage
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- กลุ่มบริหารแผนงานและงบประมาณ -->
+                    <div class="cloud-card bg-white rounded-lg shadow-lg overflow-hidden">
+                        <div class="bg-gradient-to-r from-green-500 to-green-600 p-4 text-white">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <i class="fas fa-chart-line text-3xl mr-3 opacity-80"></i>
+                                    <div>
+                                        <h3 class="text-xl font-bold">กลุ่มบริหารแผนงานและงบประมาณ</h3>
+                                        <p class="text-green-100 text-sm">Planning and Budget Department</p>
+                                    </div>
+                                </div>
+                                <span class="cloud-status bg-white/20 px-3 py-1 rounded-full text-sm">
+                                    <i class="fas fa-circle text-green-300 mr-1"></i>ออนไลน์
+                                </span>
+                            </div>
+                        </div>
+                        <div class="p-4">
+                            <div class="mb-4">
+                                <div class="flex items-center justify-between text-sm text-gray-600 mb-2">
+                                    <span><i class="fas fa-folder mr-1"></i>จำนวนโฟลเดอร์: 8</span>
+                                    <span><i class="fas fa-file mr-1"></i>จำนวนไฟล์: 234</span>
+                                </div>
+                                <div class="flex items-center justify-between text-sm text-gray-600">
+                                    <span><i class="fas fa-database mr-1"></i>พื้นที่ใช้งาน: 3.1 GB</span>
+                                    <span><i class="fas fa-user mr-1"></i>ผู้ใช้: 18 คน</span>
+                                </div>
+                            </div>
+                            <div class="border-t pt-4">
+                                <p class="text-sm text-gray-600 mb-3">เอกสารล่าสุด: งบประมาณประจำปี 2569</p>
+                                <a href="https://home.mycloud.com/action/share/b91896dc-2385-44ad-9a4d-a8beeb9cd717" 
+                                   target="_blank" 
+                                   class="block w-full bg-green-600 text-white text-center py-2 rounded-lg hover:bg-green-700 transition">
+                                    <i class="fas fa-external-link-alt mr-2"></i>เข้าสู่ Cloud Storage
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- กลุ่มบริหารงานวิชาการ -->
+                    <div class="cloud-card bg-white rounded-lg shadow-lg overflow-hidden">
+                        <div class="bg-gradient-to-r from-blue-500 to-blue-600 p-4 text-white">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <i class="fas fa-graduation-cap text-3xl mr-3 opacity-80"></i>
+                                    <div>
+                                        <h3 class="text-xl font-bold">กลุ่มบริหารงานวิชาการ</h3>
+                                        <p class="text-blue-100 text-sm">Academic Affairs Department</p>
+                                    </div>
+                                </div>
+                                <span class="cloud-status bg-white/20 px-3 py-1 rounded-full text-sm">
+                                    <i class="fas fa-circle text-green-300 mr-1"></i>ออนไลน์
+                                </span>
+                            </div>
+                        </div>
+                        <div class="p-4">
+                            <div class="mb-4">
+                                <div class="flex items-center justify-between text-sm text-gray-600 mb-2">
+                                    <span><i class="fas fa-folder mr-1"></i>จำนวนโฟลเดอร์: 15</span>
+                                    <span><i class="fas fa-file mr-1"></i>จำนวนไฟล์: 342</span>
+                                </div>
+                                <div class="flex items-center justify-between text-sm text-gray-600">
+                                    <span><i class="fas fa-database mr-1"></i>พื้นที่ใช้งาน: 4.7 GB</span>
+                                    <span><i class="fas fa-user mr-1"></i>ผู้ใช้: 42 คน</span>
+                                </div>
+                            </div>
+                            <div class="border-t pt-4">
+                                <p class="text-sm text-gray-600 mb-3">เอกสารล่าสุด: ตารางสอนภาคเรียนที่ 2</p>
+                                <a href="https://home.mycloud.com/action/share/69aa0c0e-dd0a-45d1-86e3-83d62d3e3784" 
+                                   target="_blank" 
+                                   class="block w-full bg-blue-600 text-white text-center py-2 rounded-lg hover:bg-blue-700 transition">
+                                    <i class="fas fa-external-link-alt mr-2"></i>เข้าสู่ Cloud Storage
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- กลุ่มบริหารงานทั่วไป -->
+                    <div class="cloud-card bg-white rounded-lg shadow-lg overflow-hidden">
+                        <div class="bg-gradient-to-r from-orange-500 to-orange-600 p-4 text-white">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <i class="fas fa-cogs text-3xl mr-3 opacity-80"></i>
+                                    <div>
+                                        <h3 class="text-xl font-bold">กลุ่มบริหารงานทั่วไป</h3>
+                                        <p class="text-orange-100 text-sm">General Administration Department</p>
+                                    </div>
+                                </div>
+                                <span class="cloud-status bg-white/20 px-3 py-1 rounded-full text-sm">
+                                    <i class="fas fa-circle text-green-300 mr-1"></i>ออนไลน์
+                                </span>
+                            </div>
+                        </div>
+                        <div class="p-4">
+                            <div class="mb-4">
+                                <div class="flex items-center justify-between text-sm text-gray-600 mb-2">
+                                    <span><i class="fas fa-folder mr-1"></i>จำนวนโฟลเดอร์: 10</span>
+                                    <span><i class="fas fa-file mr-1"></i>จำนวนไฟล์: 189</span>
+                                </div>
+                                <div class="flex items-center justify-between text-sm text-gray-600">
+                                    <span><i class="fas fa-database mr-1"></i>พื้นที่ใช้งาน: 2.8 GB</span>
+                                    <span><i class="fas fa-user mr-1"></i>ผู้ใช้: 31 คน</span>
+                                </div>
+                            </div>
+                            <div class="border-t pt-4">
+                                <p class="text-sm text-gray-600 mb-3">เอกสารล่าสุด: รายงานการประชุม</p>
+                                <a href="https://home.mycloud.com/action/share/0d00ff49-23da-4c92-aad3-f22428111f9e" 
+                                   target="_blank" 
+                                   class="block w-full bg-orange-600 text-white text-center py-2 rounded-lg hover:bg-orange-700 transition">
+                                    <i class="fas fa-external-link-alt mr-2"></i>เข้าสู่ Cloud Storage
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cloud Storage Summary -->
+                <div class="mt-8 bg-gray-50 rounded-lg p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                        <i class="fas fa-chart-pie text-blue-600 mr-2"></i>สรุปการใช้งาน Cloud Storage
+                    </h3>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="bg-white rounded-lg p-4 text-center">
+                            <i class="fas fa-database text-3xl text-blue-500 mb-2"></i>
+                            <p class="text-2xl font-bold text-gray-800">13 GB</p>
+                            <p class="text-sm text-gray-600">พื้นที่ใช้งานรวม</p>
+                        </div>
+                        <div class="bg-white rounded-lg p-4 text-center">
+                            <i class="fas fa-file-alt text-3xl text-green-500 mb-2"></i>
+                            <p class="text-2xl font-bold text-gray-800">921</p>
+                            <p class="text-sm text-gray-600">ไฟล์ทั้งหมด</p>
+                        </div>
+                        <div class="bg-white rounded-lg p-4 text-center">
+                            <i class="fas fa-folder-open text-3xl text-purple-500 mb-2"></i>
+                            <p class="text-2xl font-bold text-gray-800">45</p>
+                            <p class="text-sm text-gray-600">โฟลเดอร์ทั้งหมด</p>
+                        </div>
+                        <div class="bg-white rounded-lg p-4 text-center">
+                            <i class="fas fa-users text-3xl text-orange-500 mb-2"></i>
+                            <p class="text-2xl font-bold text-gray-800">115</p>
+                            <p class="text-sm text-gray-600">ผู้ใช้งานทั้งหมด</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Instructions -->
+                <div class="mt-6 bg-blue-50 border-l-4 border-blue-500 p-4">
+                    <h4 class="text-blue-800 font-semibold mb-2">
+                        <i class="fas fa-info-circle mr-2"></i>คำแนะนำการใช้งาน
+                    </h4>
+                    <ul class="text-blue-700 text-sm space-y-1">
+                        <li>• คลิกปุ่ม "เข้าสู่ Cloud Storage" เพื่อเข้าถึงพื้นที่จัดเก็บของแต่ละกลุ่มงาน</li>
+                        <li>• ผู้ใช้จะต้องมีสิทธิ์ในการเข้าถึงตามที่กลุ่มงานกำหนด</li>
+                        <li>• สามารถอัพโหลด ดาวน์โหลด และแชร์ไฟล์ได้ตามสิทธิ์ที่ได้รับ</li>
+                        <li>• หากพบปัญหาในการเข้าใช้งาน กรุณาติดต่อผู้ดูแลระบบ</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Dashboard Section -->
+            <div data-section="dashboard" class="fade-in hidden">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">แดชบอร์ด</h2>
+                
+                <!-- Date Range Selector -->
+                <div class="bg-white rounded-lg shadow-md p-4 mb-6">
+                    <div class="flex items-center gap-4">
+                        <label class="text-gray-700 font-medium">ช่วงเวลา:</label>
+                        <select id="dateRange" class="px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                            <option value="today">วันนี้</option>
+                            <option value="week">สัปดาห์นี้</option>
+                            <option value="month" selected>เดือนนี้</option>
+                            <option value="year">ปีนี้</option>
+                            <option value="custom">กำหนดเอง</option>
+                        </select>
+                        <button id="exportBtn" class="ml-auto px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
+                            <i class="fas fa-download mr-2"></i>ส่งออกรายงาน
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Stats Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                    <div class="bg-gradient-to-br from-purple-500 to-purple-600 text-white p-6 rounded-lg shadow-lg">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-purple-100">บริหารงานบุคคล</p>
+                                <p class="text-3xl font-bold">24</p>
+                                <p class="text-sm text-purple-200 mt-2">
+                                    <i class="fas fa-arrow-up mr-1"></i>12% จากเดือนที่แล้ว
+                                </p>
+                            </div>
+                            <i class="fas fa-users text-4xl opacity-50"></i>
+                        </div>
+                    </div>
+                    <div class="bg-gradient-to-br from-green-500 to-green-600 text-white p-6 rounded-lg shadow-lg">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-green-100">แผนงานและงบประมาณ</p>
+                                <p class="text-3xl font-bold">18</p>
+                                <p class="text-sm text-green-200 mt-2">
+                                    <i class="fas fa-arrow-down mr-1"></i>5% จากเดือนที่แล้ว
+                                </p>
+                            </div>
+                            <i class="fas fa-chart-line text-4xl opacity-50"></i>
+                        </div>
+                    </div>
+                    <div class="bg-gradient-to-br from-blue-500 to-blue-600 text-white p-6 rounded-lg shadow-lg">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-blue-100">บริหารงานวิชาการ</p>
+                                <p class="text-3xl font-bold">42</p>
+                                <p class="text-sm text-blue-200 mt-2">
+                                    <i class="fas fa-arrow-up mr-1"></i>8% จากเดือนที่แล้ว
+                                </p>
+                            </div>
+                            <i class="fas fa-graduation-cap text-4xl opacity-50"></i>
+                        </div>
+                    </div>
+                    <div class="bg-gradient-to-br from-orange-500 to-orange-600 text-white p-6 rounded-lg shadow-lg">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-orange-100">บริหารงานทั่วไป</p>
+                                <p class="text-3xl font-bold">31</p>
+                                <p class="text-sm text-orange-200 mt-2">
+                                    <i class="fas fa-arrow-up mr-1"></i>15% จากเดือนที่แล้ว
+                                </p>
+                            </div>
+                            <i class="fas fa-cogs text-4xl opacity-50"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Section -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white rounded-lg shadow-md p-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">สถิติการอัพโหลดรายวัน</h3>
+                        <canvas id="uploadChart"></canvas>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-md p-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">เอกสารตามประเภท</h3>
+                        <canvas id="typeChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Upload Section -->
+            <div data-section="upload" class="fade-in hidden">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">อัพโหลดเอกสาร</h2>
+                
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <form id="uploadForm">
+                        <div class="grid md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-gray-700 font-semibold mb-2">เลือกกลุ่มงาน <span class="text-red-500">*</span></label>
+                                <select id="department" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500" required>
+                                    <option value="">-- เลือกกลุ่มงาน --</option>
+                                    <option value="hr">กลุ่มงานบริหารงานบุคคล</option>
+                                    <option value="budget">กลุ่มงานบริหารแผนงานและงบประมาณ</option>
+                                    <option value="academic">กลุ่มบริหารงานวิชาการ</option>
+                                    <option value="general">กลุ่มบริหารงานทั่วไป</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-gray-700 font-semibold mb-2">ประเภทเอกสาร <span class="text-red-500">*</span></label>
+                                <select id="docType" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500" required>
+                                    <option value="">-- เลือกประเภท --</option>
+                                    <option value="order">คำสั่ง</option>
+                                    <option value="letter">หนังสือราชการ</option>
+                                    <option value="announce">ประกาศ</option>
+                                    <option value="report">รายงาน</option>
+                                    <option value="plan">แผนงาน</option>
+                                    <option value="other">อื่นๆ</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="mt-6">
+                            <label class="block text-gray-700 font-semibold mb-2">ชื่อเอกสาร <span class="text-red-500">*</span></label>
+                            <input type="text" id="docTitle" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="กรอกชื่อเอกสาร" required>
+                        </div>
+
+                        <div class="mt-6">
+                            <label class="block text-gray-700 font-semibold mb-2">คำอธิบาย</label>
+                            <textarea id="docDescription" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500" rows="3" placeholder="กรอกคำอธิบายเพิ่มเติม"></textarea>
+                        </div>
+
+                        <div class="mt-6">
+                            <label class="block text-gray-700 font-semibold mb-2">แท็ก (คั่นด้วยคอมม่า)</label>
+                            <input type="text" id="docTags" class="w-full px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500" placeholder="เช่น สำคัญ, ด่วน, 2568">
+                        </div>
+
+                        <div class="mt-6">
+                            <label class="block text-gray-700 font-semibold mb-2">อัพโหลดไฟล์ <span class="text-red-500">*</span></label>
+                            <div id="dropZone" class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition cursor-pointer">
+                                <i class="fas fa-cloud-upload-alt text-6xl text-gray-400 mb-4"></i>
+                                <p class="text-gray-600">คลิกเพื่อเลือกไฟล์ หรือลากไฟล์มาวางที่นี่</p>
+                                <p class="text-sm text-gray-500 mt-2">รองรับไฟล์ JPG, PNG, PDF, DOC, DOCX, XLS, XLSX (ขนาดไม่เกิน 10MB)</p>
+                                <input type="file" id="fileInput" class="hidden" accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xls,.xlsx" multiple required>
+                            </div>
+
+                            <!-- File Preview Area -->
+                            <div id="filePreview" class="grid grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+                                <!-- File previews will be added here -->
+                            </div>
+
+                            <!-- Upload Progress -->
+                            <div id="uploadProgress" class="hidden mt-4">
+                                <div class="bg-gray-200 rounded-full h-2">
+                                    <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all" style="width: 0%"></div>
+                                </div>
+                                <p class="text-sm text-gray-600 mt-2">กำลังอัพโหลด... <span id="uploadPercent">0</span>%</p>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end space-x-4 mt-6">
+                            <button type="button" id="cancelUpload" class="px-6 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition">
+                                ยกเลิก
+                            </button>
+                            <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
+                                <i class="fas fa-upload mr-2"></i>อัพโหลด
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Documents Section -->
+            <div data-section="documents" class="fade-in hidden">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-2xl font-bold text-gray-800">เอกสารทั้งหมด</h2>
+                    <div class="flex gap-2">
+                        <button id="bulkSelectBtn" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition">
+                            <i class="fas fa-check-square mr-2"></i>เลือกหลายรายการ
+                        </button>
+                        <button id="bulkDownloadBtn" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition hidden">
+                            <i class="fas fa-download mr-2"></i>ดาวน์โหลดที่เลือก
+                        </button>
+                        <button id="bulkDeleteBtn" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition hidden">
+                            <i class="fas fa-trash mr-2"></i>ลบที่เลือก
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Advanced Search and Filter -->
+                <div class="bg-white rounded-lg shadow-md p-4 mb-6">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div class="relative">
+                            <input type="text" id="docSearch" placeholder="ค้นหาเอกสาร..." class="w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                            <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+                        </div>
+                        <select id="filterDepartment" class="px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                            <option value="">ทุกกลุ่มงาน</option>
+                            <option value="hr">บริหารงานบุคคล</option>
+                            <option value="budget">แผนงานและงบประมาณ</option>
+                            <option value="academic">บริหารงานวิชาการ</option>
+                            <option value="general">บริหารงานทั่วไป</option>
+                        </select>
+                        <select id="filterType" class="px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                            <option value="">ทุกประเภท</option>
+                            <option value="order">คำสั่ง</option>
+                            <option value="letter">หนังสือราชการ</option>
+                            <option value="announce">ประกาศ</option>
+                            <option value="report">รายงาน</option>
+                        </select>
+                        <select id="filterStatus" class="px-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                            <option value="">ทุกสถานะ</option>
+                            <option value="approved">อนุมัติแล้ว</option>
+                            <option value="pending">รออนุมัติ</option>
+                            <option value="draft">แบบร่าง</option>
+                            <option value="rejected">ไม่อนุมัติ</option>
+                        </select>
+                    </div>
+                    <div class="flex items-center justify-between mt-4">
+                        <div class="text-sm text-gray-600">
+                            แสดง <span id="showingCount">0</span> จาก <span id="totalCount">0</span> รายการ
+                        </div>
+                        <div class="flex gap-2">
+                            <button id="clearFilters" class="text-sm text-blue-600 hover:text-blue-800">
+                                <i class="fas fa-times mr-1"></i>ล้างตัวกรอง
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Documents Table -->
+                <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                    <table class="w-full">
+                        <thead class="bg-gray-50 border-b">
+                            <tr>
+                                <th class="px-4 py-3 text-left">
+                                    <input type="checkbox" id="selectAll" class="hidden">
+                                </th>
+                                <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">ชื่อเอกสาร</th>
+                                <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">ประเภท</th>
+                                <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">กลุ่มงาน</th>
+                                <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">วันที่</th>
+                                <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">ผู้อัพโหลด</th>
+                                <th class="px-4 py-3 text-left text-sm font-semibold text-gray-700">สถานะ</th>
+                                <th class="px-4 py-3 text-center text-sm font-semibold text-gray-700">การดำเนินการ</th>
+                            </tr>
+                        </thead>
+                        <tbody id="documentsTableBody">
+                            <!-- Document rows will be loaded here -->
+                        </tbody>
+                    </table>
+                    
+                    <!-- Pagination -->
+                    <div class="px-4 py-3 bg-gray-50 border-t flex items-center justify-between">
+                        <div class="text-sm text-gray-600">
+                            หน้า <span id="currentPage">1</span> จาก <span id="totalPages">1</span>
+                        </div>
+                        <div class="flex gap-2">
+                            <button id="prevPage" class="px-3 py-1 bg-white border rounded hover:bg-gray-100 disabled:opacity-50" disabled>
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <button id="nextPage" class="px-3 py-1 bg-white border rounded hover:bg-gray-100">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reports Section -->
+            <div data-section="reports" class="fade-in hidden">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">รายงานและสถิติ</h2>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-white rounded-lg shadow-md p-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">สรุปรายเดือน</h3>
+                        <canvas id="monthlyChart"></canvas>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-md p-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">อันดับผู้ใช้งาน</h3>
+                        <div id="topUsers" class="space-y-3">
+                            <!-- Top users will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modals -->
+    <!-- Document Preview Modal -->
+    <div id="previewModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div class="flex items-center justify-between p-4 border-b">
+                <h3 class="text-lg font-semibold">ตัวอย่างเอกสาร</h3>
+                <button onclick="closePreviewModal()" class="text-gray-500 hover:text-gray-700">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div id="previewContent" class="p-4 overflow-auto" style="max-height: calc(90vh - 120px);">
+                <!-- Preview content will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Application State Management
+        const AppState = {
+            currentSection: 'announcement',
+            user: {
+                id: 1,
+                name: 'คุณอาจารย์สมชาย',
+                role: 'admin', // admin, teacher, viewer
+                department: 'academic'
+            },
+            documents: [],
+            filters: {
+                search: '',
+                department: null,
+                type: null,
+                status: null
+            },
+            selectedDocuments: new Set(),
+            bulkMode: false,
+            
+            // Cloud Storage Links
+            cloudStorageLinks: {
+                hr: 'https://home.mycloud.com/action/share/415a910f-f8af-4f42-a182-01f11a40fd06',
+                budget: 'https://home.mycloud.com/action/share/b91896dc-2385-44ad-9a4d-a8beeb9cd717',
+                academic: 'https://home.mycloud.com/action/share/69aa0c0e-dd0a-45d1-86e3-83d62d3e3784',
+                general: 'https://home.mycloud.com/action/share/0d00ff49-23da-4c92-aad3-f22428111f9e'
+            },
+            
+            // Mock data
+            mockDocuments: [
+                {
+                    id: 1,
+                    title: 'คำสั่งแต่งตั้งคณะกรรมการ',
+                    type: 'order',
+                    department: 'hr',
+                    status: 'approved',
+                    date: '2568-09-09',
+                    owner: 'ผอ.โรงเรียน',
+                    description: 'คำสั่งแต่งตั้งคณะกรรมการประเมินผลการปฏิบัติงาน ประจำปีการศึกษา 2568',
+                    fileType: 'pdf',
+                    views: 156,
+                    featured: true
+                },
+                {
+                    id: 2,
+                    title: 'แผนพัฒนาการศึกษา',
+                    type: 'plan',
+                    department: 'budget',
+                    status: 'pending',
+                    date: '2568-09-08',
+                    owner: 'หัวหน้าแผนงาน',
+                    description: 'แผนพัฒนาคุณภาพการศึกษา ระยะ 3 ปี (พ.ศ. 2568-2570)',
+                    fileType: 'pdf',
+                    views: 234,
+                    featured: true
+                },
+                {
+                    id: 3,
+                    title: 'ตารางสอนภาคเรียนที่ 2',
+                    type: 'report',
+                    department: 'academic',
+                    status: 'approved',
+                    date: '2568-09-07',
+                    owner: 'หัวหน้าวิชาการ',
+                    description: 'ตารางสอนประจำภาคเรียนที่ 2 ปีการศึกษา 2568 ทุกระดับชั้น',
+                    fileType: 'excel',
+                    views: 342
+                },
+                {
+                    id: 4,
+                    title: 'รายงานการประชุม',
+                    type: 'report',
+                    department: 'general',
+                    status: 'draft',
+                    date: '2568-09-06',
+                    owner: 'เลขานุการ',
+                    description: 'รายงานการประชุมคณะกรรมการสถานศึกษา ครั้งที่ 3/2568',
+                    fileType: 'pdf',
+                    views: 89
+                },
+                {
+                    id: 5,
+                    title: 'ผลการเรียนภาคเรียนที่ 1',
+                    type: 'report',
+                    department: 'academic',
+                    status: 'approved',
+                    date: '2568-09-09',
+                    owner: 'งานทะเบียน',
+                    description: 'สรุปผลการเรียนนักเรียนทุกระดับชั้น ภาคเรียนที่ 1/2568',
+                    fileType: 'excel',
+                    views: 456,
+                    isNew: true
+                },
+                {
+                    id: 6,
+                    title: 'งบประมาณประจำปี 2569',
+                    type: 'plan',
+                    department: 'budget',
+                    status: 'approved',
+                    date: '2568-09-05',
+                    owner: 'หัวหน้าแผนงาน',
+                    description: 'แผนงบประมาณประจำปีงบประมาณ 2569 ฉบับสมบูรณ์',
+                    fileType: 'pdf',
+                    views: 278
+                }
+            ]
+        };
+
+        // Document Manager Module
+        const DocumentManager = {
+            init() {
+                this.loadDocuments();
+                this.bindEvents();
+                this.showSection(AppState.currentSection);
+                this.initializeCharts();
+            },
+
+            loadDocuments() {
+                // Simulate API call
+                setTimeout(() => {
+                    AppState.documents = AppState.mockDocuments;
+                    this.renderDocuments();
+                    this.updateStats();
+                }, 500);
+            },
+
+            renderDocuments() {
+                // Render featured documents
+                const featuredDocs = AppState.documents.filter(doc => doc.featured);
+                const featuredHtml = featuredDocs.map(doc => this.createFeaturedCard(doc)).join('');
+                document.getElementById('featuredDocuments').innerHTML = featuredHtml;
+
+                // Render recent documents
+                const recentDocs = AppState.documents.slice(0, 6);
+                const recentHtml = recentDocs.map(doc => this.createDocumentCard(doc)).join('');
+                document.getElementById('recentDocuments').innerHTML = recentHtml;
+
+                // Render documents table
+                this.renderDocumentsTable();
+            },
+
+            createFeaturedCard(doc) {
+                const departmentColors = {
+                    hr: 'purple',
+                    budget: 'green',
+                    academic: 'blue',
+                    general: 'orange'
+                };
+                const color = departmentColors[doc.department] || 'gray';
+                
+                return `
+                    <div class="bg-white/10 backdrop-blur rounded-lg p-4 hover:bg-white/20 transition cursor-pointer" onclick="DocumentManager.previewDocument(${doc.id})">
+                        <div class="flex items-start">
+                            <i class="fas fa-file-${doc.fileType === 'pdf' ? 'pdf' : 'alt'} text-3xl mr-4 text-${color}-300"></i>
+                            <div class="flex-1">
+                                <h4 class="font-semibold mb-1">${doc.title}</h4>
+                                <p class="text-sm opacity-90 mb-2">${this.getDepartmentName(doc.department)}</p>
+                                <div class="flex items-center text-xs">
+                                    <i class="fas fa-calendar mr-1"></i> ${this.formatDate(doc.date)}
+                                    <span class="ml-3"><i class="fas fa-eye mr-1"></i> ${doc.views} views</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            },
+
+            createDocumentCard(doc) {
+                const departmentColors = {
+                    hr: 'purple',
+                    budget: 'green',
+                    academic: 'blue',
+                    general: 'orange'
+                };
+                const color = departmentColors[doc.department] || 'gray';
+                
+                const statusBadge = this.getStatusBadge(doc.status);
+                const actions = this.getDocumentActions(doc);
+                
+                return `
+                    <div class="doc-card bg-white rounded-lg shadow-md overflow-hidden">
+                        <div class="bg-gradient-to-r from-${color}-500 to-${color}-600 p-4 text-white">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="bg-white/20 px-2 py-1 rounded text-xs">${this.getDepartmentName(doc.department)}</span>
+                                ${statusBadge}
+                            </div>
+                            <i class="fas fa-file-${doc.fileType === 'pdf' ? 'pdf' : doc.fileType === 'excel' ? 'excel' : 'alt'} text-4xl mb-3 opacity-50"></i>
+                            <h4 class="font-bold text-lg">${doc.title}</h4>
+                        </div>
+                        <div class="p-4">
+                            <p class="text-sm text-gray-600 mb-3">${doc.description}</p>
+                            <div class="flex items-center justify-between text-sm text-gray-500 mb-3">
+                                <span><i class="fas fa-calendar mr-1"></i> ${this.formatDate(doc.date)}</span>
+                                <span><i class="fas fa-user mr-1"></i> ${doc.owner}</span>
+                            </div>
+                            <div class="flex gap-2">
+                                ${actions}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            },
+
+            renderDocumentsTable() {
+                const filteredDocs = this.filterDocuments();
+                const tbody = document.getElementById('documentsTableBody');
+                
+                const html = filteredDocs.map(doc => `
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="px-4 py-3">
+                            <input type="checkbox" class="doc-checkbox ${AppState.bulkMode ? '' : 'hidden'}" data-doc-id="${doc.id}">
+                        </td>
+                        <td class="px-4 py-3">
+                            <div class="flex items-center">
+                                <i class="fas fa-file-${doc.fileType === 'pdf' ? 'pdf' : doc.fileType === 'excel' ? 'excel' : 'alt'} text-gray-400 mr-3"></i>
+                                <div>
+                                    <div class="font-medium text-gray-900">${doc.title}</div>
+                                    <div class="text-xs text-gray-500">${doc.description.substring(0, 50)}...</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3 text-sm">${this.getTypeName(doc.type)}</td>
+                        <td class="px-4 py-3 text-sm">${this.getDepartmentName(doc.department)}</td>
+                        <td class="px-4 py-3 text-sm">${this.formatDate(doc.date)}</td>
+                        <td class="px-4 py-3 text-sm">${doc.owner}</td>
+                        <td class="px-4 py-3">${this.getStatusBadge(doc.status)}</td>
+                        <td class="px-4 py-3">
+                            <div class="flex justify-center gap-2">
+                                <button onclick="DocumentManager.previewDocument(${doc.id})" class="text-blue-600 hover:text-blue-800" title="ดู">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                                <button onclick="DocumentManager.downloadDocument(${doc.id})" class="text-green-600 hover:text-green-800" title="ดาวน์โหลด">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                                ${this.canEdit(doc) ? `
+                                    <button onclick="DocumentManager.editDocument(${doc.id})" class="text-yellow-600 hover:text-yellow-800" title="แก้ไข">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                ` : ''}
+                                ${this.canDelete(doc) ? `
+                                    <button onclick="DocumentManager.deleteDocument(${doc.id})" class="text-red-600 hover:text-red-800" title="ลบ">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+                
+                tbody.innerHTML = html;
+                
+                // Update counts
+                document.getElementById('showingCount').textContent = filteredDocs.length;
+                document.getElementById('totalCount').textContent = AppState.documents.length;
+            },
+
+            filterDocuments() {
+                let docs = [...AppState.documents];
+                
+                if (AppState.filters.search) {
+                    const search = AppState.filters.search.toLowerCase();
+                    docs = docs.filter(doc => 
+                        doc.title.toLowerCase().includes(search) ||
+                        doc.description.toLowerCase().includes(search) ||
+                        doc.owner.toLowerCase().includes(search)
+                    );
+                }
+                
+                if (AppState.filters.department) {
+                    docs = docs.filter(doc => doc.department === AppState.filters.department);
+                }
+                
+                if (AppState.filters.type) {
+                    docs = docs.filter(doc => doc.type === AppState.filters.type);
+                }
+                
+                if (AppState.filters.status) {
+                    docs = docs.filter(doc => doc.status === AppState.filters.status);
+                }
+                
+                return docs;
+            },
+
+            getStatusBadge(status) {
+                const badges = {
+                    approved: '<span class="bg-green-400 text-green-900 px-2 py-1 rounded text-xs font-semibold">อนุมัติแล้ว</span>',
+                    pending: '<span class="bg-yellow-400 text-yellow-900 px-2 py-1 rounded text-xs font-semibold">รออนุมัติ</span>',
+                    draft: '<span class="bg-gray-400 text-gray-900 px-2 py-1 rounded text-xs font-semibold">แบบร่าง</span>',
+                    rejected: '<span class="bg-red-400 text-white px-2 py-1 rounded text-xs font-semibold">ไม่อนุมัติ</span>'
+                };
+                return badges[status] || '';
+            },
+
+            getDocumentActions(doc) {
+                const actions = [];
+                
+                // Everyone can view and download
+                actions.push(`
+                    <button onclick="DocumentManager.previewDocument(${doc.id})" class="flex-1 bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition">
+                        <i class="fas fa-eye mr-1"></i> ดู
+                    </button>
+                `);
+                
+                actions.push(`
+                    <button onclick="DocumentManager.downloadDocument(${doc.id})" class="flex-1 bg-green-500 text-white py-2 rounded hover:bg-green-600 transition">
+                        <i class="fas fa-download mr-1"></i> ดาวน์โหลด
+                    </button>
+                `);
+                
+                // Edit/Delete based on permissions
+                if (this.canEdit(doc)) {
+                    actions.push(`
+                        <button onclick="DocumentManager.editDocument(${doc.id})" class="flex-1 bg-yellow-500 text-white py-2 rounded hover:bg-yellow-600 transition">
+                            <i class="fas fa-edit mr-1"></i> แก้ไข
+                        </button>
+                    `);
+                }
+                
+                if (this.canApprove(doc)) {
+                    actions.push(`
+                        <button onclick="DocumentManager.approveDocument(${doc.id})" class="flex-1 bg-purple-500 text-white py-2 rounded hover:bg-purple-600 transition">
+                            <i class="fas fa-check mr-1"></i> อนุมัติ
+                        </button>
+                    `);
+                }
+                
+                return actions.join('');
+            },
+
+            canEdit(doc) {
+                return AppState.user.role === 'admin' || doc.owner === AppState.user.name;
+            },
+
+            canDelete(doc) {
+                return AppState.user.role === 'admin';
+            },
+
+            canApprove(doc) {
+                return AppState.user.role === 'admin' && doc.status === 'pending';
+            },
+
+            getDepartmentName(dept) {
+                const names = {
+                    hr: 'บริหารงานบุคคล',
+                    budget: 'แผนงานและงบประมาณ',
+                    academic: 'บริหารงานวิชาการ',
+                    general: 'บริหารงานทั่วไป'
+                };
+                return names[dept] || dept;
+            },
+
+            getTypeName(type) {
+                const names = {
+                    order: 'คำสั่ง',
+                    letter: 'หนังสือราชการ',
+                    announce: 'ประกาศ',
+                    report: 'รายงาน',
+                    plan: 'แผนงาน',
+                    other: 'อื่นๆ'
+                };
+                return names[type] || type;
+            },
+
+            formatDate(dateStr) {
+                const date = new Date(dateStr);
+                const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+                return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear() + 543}`;
+            },
+
+            previewDocument(docId) {
+                const doc = AppState.documents.find(d => d.id === docId);
+                if (!doc) return;
+                
+                showNotification('info', 'กำลังเปิดตัวอย่างเอกสาร...');
+                
+                // Show preview modal
+                const modal = document.getElementById('previewModal');
+                const content = document.getElementById('previewContent');
+                
+                content.innerHTML = `
+                    <div class="text-center py-8">
+                        <i class="fas fa-file-${doc.fileType === 'pdf' ? 'pdf' : 'alt'} text-6xl text-gray-400 mb-4"></i>
+                        <h3 class="text-xl font-semibold mb-2">${doc.title}</h3>
+                        <p class="text-gray-600 mb-4">${doc.description}</p>
+                        <div class="flex justify-center gap-4">
+                            <button onclick="DocumentManager.downloadDocument(${doc.id})" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                                <i class="fas fa-download mr-2"></i>ดาวน์โหลดเอกสาร
+                            </button>
+                            ${AppState.cloudStorageLinks[doc.department] ? `
+                                <a href="${AppState.cloudStorageLinks[doc.department]}" target="_blank" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                    <i class="fas fa-cloud mr-2"></i>ดูใน Cloud Storage
+                                </a>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+                
+                modal.classList.remove('hidden');
+            },
+
+            downloadDocument(docId) {
+                const doc = AppState.documents.find(d => d.id === docId);
+                if (!doc) return;
+                
+                showNotification('success', `กำลังดาวน์โหลด ${doc.title}...`);
+                
+                // Simulate download
+                setTimeout(() => {
+                    showNotification('success', 'ดาวน์โหลดเสร็จสิ้น!');
+                }, 2000);
+            },
+
+            editDocument(docId) {
+                const doc = AppState.documents.find(d => d.id === docId);
+                if (!doc) return;
+                
+                if (!this.canEdit(doc)) {
+                    showNotification('error', 'คุณไม่มีสิทธิ์แก้ไขเอกสารนี้');
+                    return;
+                }
+                
+                showNotification('info', 'กำลังเปิดหน้าแก้ไขเอกสาร...');
+                // Navigate to edit page
+            },
+
+            deleteDocument(docId) {
+                const doc = AppState.documents.find(d => d.id === docId);
+                if (!doc) return;
+                
+                if (!this.canDelete(doc)) {
+                    showNotification('error', 'คุณไม่มีสิทธิ์ลบเอกสารนี้');
+                    return;
+                }
+                
+                if (confirm(`คุณต้องการลบเอกสาร "${doc.title}" หรือไม่?`)) {
+                    // Remove from state
+                    AppState.documents = AppState.documents.filter(d => d.id !== docId);
+                    this.renderDocuments();
+                    showNotification('success', 'ลบเอกสารเรียบร้อยแล้ว');
+                }
+            },
+
+            approveDocument(docId) {
+                const doc = AppState.documents.find(d => d.id === docId);
+                if (!doc) return;
+                
+                if (!this.canApprove(doc)) {
+                    showNotification('error', 'คุณไม่มีสิทธิ์อนุมัติเอกสารนี้');
+                    return;
+                }
+                
+                // Update status
+                doc.status = 'approved';
+                this.renderDocuments();
+                showNotification('success', `อนุมัติเอกสาร "${doc.title}" เรียบร้อยแล้ว`);
+            },
+
+            showSection(sectionId) {
+                // Hide all sections
+                document.querySelectorAll('[data-section]').forEach(section => {
+                    section.classList.add('hidden');
+                });
+                
+                // Show selected section
+                const section = document.querySelector(`[data-section="${sectionId}"]`);
+                if (section) {
+                    section.classList.remove('hidden');
+                }
+                
+                // Update active menu
+                document.querySelectorAll('[data-menu-item]').forEach(item => {
+                    item.classList.remove('active');
+                    if (item.dataset.menuItem === sectionId) {
+                        item.classList.add('active');
+                    }
+                });
+                
+                AppState.currentSection = sectionId;
+            },
+
+            updateStats() {
+                const today = new Date().toISOString().split('T')[0];
+                const todayDocs = AppState.documents.filter(doc => doc.date === today).length;
+                const pendingDocs = AppState.documents.filter(doc => doc.status === 'pending').length;
+                
+                document.getElementById('totalDocs').textContent = AppState.documents.length;
+                document.getElementById('todayDocs').textContent = todayDocs;
+                document.getElementById('pendingDocs').textContent = pendingDocs;
+            },
+
+            initializeCharts() {
+                // Initialize charts here if needed
+                // You can use Chart.js or any other library
+            },
+
+            bindEvents() {
+                // Menu navigation
+                document.querySelectorAll('[data-menu-item]').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        this.showSection(item.dataset.menuItem);
+                    });
+                });
+
+                // Cloud Storage button in nav
+                document.getElementById('cloudStorageBtn')?.addEventListener('click', () => {
+                    this.showSection('cloud-storage');
+                });
+
+                // Department filter from sidebar
+                document.querySelectorAll('[data-department]').forEach(item => {
+                    item.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        AppState.filters.department = item.dataset.department;
+                        this.showSection('documents');
+                        this.renderDocumentsTable();
+                    });
+                });
+
+                // Search functionality with debounce
+                const searchInputs = ['globalSearch', 'docSearch'];
+                searchInputs.forEach(inputId => {
+                    const input = document.getElementById(inputId);
+                    if (input) {
+                        input.addEventListener('input', debounce((e) => {
+                            AppState.filters.search = e.target.value;
+                            this.renderDocumentsTable();
+                        }, 300));
+                    }
+                });
+
+                // Filter controls
+                ['filterDepartment', 'filterType', 'filterStatus'].forEach(filterId => {
+                    const select = document.getElementById(filterId);
+                    if (select) {
+                        select.addEventListener('change', (e) => {
+                            const filterKey = filterId.replace('filter', '').toLowerCase();
+                            AppState.filters[filterKey] = e.target.value || null;
+                            this.renderDocumentsTable();
+                        });
+                    }
+                });
+
+                // Clear filters
+                document.getElementById('clearFilters')?.addEventListener('click', () => {
+                    AppState.filters = {
+                        search: '',
+                        department: null,
+                        type: null,
+                        status: null
+                    };
+                    document.getElementById('docSearch').value = '';
+                    document.getElementById('filterDepartment').value = '';
+                    document.getElementById('filterType').value = '';
+                    document.getElementById('filterStatus').value = '';
+                    this.renderDocumentsTable();
+                });
+
+                // Bulk operations
+                document.getElementById('bulkSelectBtn')?.addEventListener('click', () => {
+                    AppState.bulkMode = !AppState.bulkMode;
+                    document.querySelectorAll('.doc-checkbox').forEach(cb => {
+                        cb.classList.toggle('hidden');
+                    });
+                    document.getElementById('bulkDownloadBtn').classList.toggle('hidden');
+                    document.getElementById('bulkDeleteBtn').classList.toggle('hidden');
+                });
+
+                // Upload form
+                const uploadForm = document.getElementById('uploadForm');
+                if (uploadForm) {
+                    uploadForm.addEventListener('submit', (e) => {
+                        e.preventDefault();
+                        this.handleUpload();
+                    });
+                }
+
+                // File input and drag & drop
+                const dropZone = document.getElementById('dropZone');
+                const fileInput = document.getElementById('fileInput');
+                
+                if (dropZone && fileInput) {
+                    dropZone.addEventListener('click', () => fileInput.click());
+                    
+                    dropZone.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        dropZone.classList.add('border-blue-500', 'bg-blue-50');
+                    });
+                    
+                    dropZone.addEventListener('dragleave', () => {
+                        dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+                    });
+                    
+                    dropZone.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+                        handleFiles(e.dataTransfer.files);
+                    });
+                    
+                    fileInput.addEventListener('change', (e) => {
+                        handleFiles(e.target.files);
+                    });
+                }
+
+                // Cancel upload
+                document.getElementById('cancelUpload')?.addEventListener('click', () => {
+                    document.getElementById('uploadForm').reset();
+                    document.getElementById('filePreview').innerHTML = '';
+                    this.showSection('announcement');
+                });
+
+                // Export button
+                document.getElementById('exportBtn')?.addEventListener('click', () => {
+                    showNotification('info', 'กำลังส่งออกรายงาน...');
+                    setTimeout(() => {
+                        showNotification('success', 'ส่งออกรายงานเรียบร้อยแล้ว');
+                    }, 2000);
+                });
+
+                // Logout
+                document.getElementById('logoutBtn')?.addEventListener('click', () => {
+                    if (confirm('คุณต้องการออกจากระบบหรือไม่?')) {
+                        showNotification('info', 'กำลังออกจากระบบ...');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 1000);
+                    }
+                });
+            },
+
+            handleUpload() {
+                const form = document.getElementById('uploadForm');
+                const formData = new FormData(form);
+                
+                // Show progress
+                const progressDiv = document.getElementById('uploadProgress');
+                const progressBar = document.getElementById('progressBar');
+                const progressText = document.getElementById('uploadPercent');
+                
+                progressDiv.classList.remove('hidden');
+                
+                // Simulate upload progress
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress += 10;
+                    progressBar.style.width = progress + '%';
+                    progressText.textContent = progress;
+                    
+                    if (progress >= 100) {
+                        clearInterval(interval);
+                        setTimeout(() => {
+                            progressDiv.classList.add('hidden');
+                            showNotification('success', 'อัพโหลดเอกสารเรียบร้อยแล้ว!');
+                            form.reset();
+                            document.getElementById('filePreview').innerHTML = '';
+                            this.showSection('documents');
+                            
+                            // Add new document to state
+                            const newDoc = {
+                                id: AppState.documents.length + 1,
+                                title: document.getElementById('docTitle').value,
+                                type: document.getElementById('docType').value,
+                                department: document.getElementById('department').value,
+                                status: 'pending',
+                                date: new Date().toISOString().split('T')[0],
+                                owner: AppState.user.name,
+                                description: document.getElementById('docDescription').value,
+                                fileType: 'pdf',
+                                views: 0
+                            };
+                            AppState.documents.unshift(newDoc);
+                            this.loadDocuments();
+                        }, 500);
+                    }
+                }, 200);
+            }
+        };
+
+        // Utility Functions
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        function showNotification(type, message) {
+            const container = document.getElementById('notificationContainer');
+            const id = 'notification-' + Date.now();
+            
+            const notification = document.createElement('div');
+            notification.id = id;
+            notification.className = `notification ${type}`;
+            notification.innerHTML = `
+                <div class="flex items-center">
+                    <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'} mr-3"></i>
+                    <span>${message}</span>
+                    <button onclick="closeNotification('${id}')" class="ml-4 text-white/80 hover:text-white">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            `;
+            
+            container.appendChild(notification);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                closeNotification(id);
+            }, 5000);
+        }
+
+        function closeNotification(id) {
+            const notification = document.getElementById(id);
+            if (notification) {
+                notification.style.animation = 'slideInRight 0.3s ease-out reverse';
+                setTimeout(() => {
+                    notification.remove();
+                }, 300);
+            }
+        }
+
+        function closePreviewModal() {
+            document.getElementById('previewModal').classList.add('hidden');
+        }
+
+        function handleFiles(files) {
+            const preview = document.getElementById('filePreview');
+            preview.innerHTML = '';
+            
+            Array.from(files).forEach((file, index) => {
+                const fileSize = (file.size / 1024 / 1024).toFixed(2);
+                const fileExt = file.name.split('.').pop().toLowerCase();
+                
+                let icon = 'file-alt';
+                if (['jpg', 'jpeg', 'png'].includes(fileExt)) icon = 'file-image';
+                else if (fileExt === 'pdf') icon = 'file-pdf';
+                else if (['doc', 'docx'].includes(fileExt)) icon = 'file-word';
+                else if (['xls', 'xlsx'].includes(fileExt)) icon = 'file-excel';
+                
+                const previewItem = document.createElement('div');
+                previewItem.className = 'file-preview-item';
+                previewItem.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <i class="fas fa-${icon} text-2xl text-gray-500 mr-3"></i>
+                            <div>
+                                <p class="font-medium text-sm">${file.name}</p>
+                                <p class="text-xs text-gray-500">${fileSize} MB</p>
+                            </div>
+                        </div>
+                        <button onclick="removeFile(${index})" class="text-red-500 hover:text-red-700">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                `;
+                
+                preview.appendChild(previewItem);
+            });
+        }
+
+        function removeFile(index) {
+            // Implementation for removing file from preview
+            showNotification('info', 'ลบไฟล์ออกจากรายการแล้ว');
+        }
+
+        function showLoading() {
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.add('hidden');
+        }
+
+        // Initialize application
+        document.addEventListener('DOMContentLoaded', () => {
+            DocumentManager.init();
+            
+            // Show welcome notification
+            showNotification('success', `ยินดีต้อนรับ ${AppState.user.name} เข้าสู่ระบบ`);
+        });
+
+        // Handle keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            // Ctrl/Cmd + K for search
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                document.getElementById('globalSearch')?.focus();
+            }
+            
+            // Escape to close modals
+            if (e.key === 'Escape') {
+                closePreviewModal();
+            }
+        });
+    </script>
+</body>
+</html>
